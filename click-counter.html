@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Click Counter</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e10;
+    --surface: #1a1a1e;
+    --border: #2a2a30;
+    --text: #e8e8f0;
+    --muted: #6a6a80;
+    --accent: #a0f0c0;
+    --accent2: #f0a0c8;
+    --glow: rgba(160, 240, 192, 0.15);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Ambient background */
+  body::before {
+    content: '';
+    position: fixed;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(160,240,192,0.04) 0%, transparent 70%);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    transition: background 0.5s;
+  }
+
+  /* Particle canvas */
+  #particles {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    padding: 40px;
+  }
+
+  .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .count-display {
+    position: relative;
+    font-size: clamp(80px, 18vw, 160px);
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text);
+    transition: transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+    user-select: none;
+    text-shadow: 0 0 60px rgba(160,240,192,0);
+    transition: text-shadow 0.3s, transform 0.1s;
+  }
+
+  .count-display.pop {
+    transform: scale(1.06);
+  }
+
+  .count-display.milestone-glow {
+    text-shadow: 0 0 80px rgba(160,240,192,0.6);
+  }
+
+  /* The big button */
+  .click-btn {
+    position: relative;
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    outline: none;
+    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.3s, box-shadow 0.3s;
+    box-shadow: 0 0 0 0 var(--glow), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .click-btn::before {
+    content: '';
+    position: absolute;
+    inset: 10px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(160,240,192,0.08), rgba(160,240,192,0.02));
+    transition: opacity 0.3s;
+  }
+
+  .click-btn:hover {
+    border-color: rgba(160,240,192,0.4);
+    box-shadow: 0 0 30px var(--glow), inset 0 1px 0 rgba(255,255,255,0.08);
+    transform: scale(1.04);
+  }
+
+  .click-btn:active {
+    transform: scale(0.93);
+    box-shadow: 0 0 60px rgba(160,240,192,0.25);
+  }
+
+  .click-btn-inner {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+
+  .click-btn:hover .click-btn-inner {
+    color: var(--accent);
+  }
+
+  /* Milestones */
+  .milestones {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 400px;
+  }
+
+  .milestone {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--surface);
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .milestone.reached {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(160,240,192,0.08);
+    box-shadow: 0 0 15px rgba(160,240,192,0.1);
+  }
+
+  /* Reset */
+  .reset-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: color 0.2s, background 0.2s;
+  }
+
+  .reset-btn:hover {
+    color: var(--accent2);
+    background: rgba(240,160,200,0.06);
+  }
+
+  /* Milestone toast */
+  .toast {
+    position: fixed;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 14px 28px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    box-shadow: 0 0 40px rgba(160,240,192,0.15);
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s;
+    opacity: 0;
+    z-index: 100;
+    white-space: nowrap;
+  }
+
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
+  /* Ripple */
+  .ripple {
+    position: fixed;
+    border-radius: 50%;
+    border: 1.5px solid rgba(160,240,192,0.5);
+    pointer-events: none;
+    z-index: 0;
+    animation: ripple-out 0.7s ease-out forwards;
+  }
+
+  @keyframes ripple-out {
+    from { opacity: 0.8; transform: scale(0); }
+    to   { opacity: 0; transform: scale(3.5); }
+  }
+
+  /* Screen flash on milestone */
+  .flash {
+    position: fixed;
+    inset: 0;
+    background: rgba(160,240,192,0.06);
+    pointer-events: none;
+    z-index: 99;
+    animation: flash-out 0.6s ease-out forwards;
+  }
+
+  @keyframes flash-out {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  /* Progress bar */
+  .progress-wrap {
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .progress-meta span {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+
+  .progress-meta .progress-next {
+    color: var(--accent);
+    opacity: 0.7;
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, rgba(160,240,192,0.5), var(--accent));
+    width: 0%;
+    transition: width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 0 8px rgba(160,240,192,0.4);
+  }
+
+  /* Confetti canvas */
+  #confetti {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 98;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="particles"></canvas>
+<canvas id="confetti"></canvas>
+
+<div class="toast" id="toast"></div>
+
+<div class="container">
+  <span class="label">total clicks</span>
+
+  <div class="count-display" id="count">0</div>
+
+  <button class="click-btn" id="btn" onclick="handleClick(event)">
+    <span class="click-btn-inner">click</span>
+  </button>
+
+  <div class="progress-wrap">
+    <div class="progress-meta">
+      <span id="progress-label">next: 10</span>
+      <span class="progress-next" id="progress-pct">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <div class="milestones" id="milestones"></div>
+
+  <button class="reset-btn" onclick="resetCount()">reset</button>
+
+  <footer style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;color:#3a3a50;text-transform:uppercase;margin-top:8px;">
+    &copy; 2026 Developed by Melvin's Studios
+  </footer>
+</div>
+
+<script>
+  const MILESTONES = [10, 25, 50, 100, 250, 500, 1000];
+  const MILESTONE_LABELS = {
+    10: '10 — warming up',
+    25: '25 — getting there',
+    50: '50 — halfway hero',
+    100: '100 — centurion',
+    250: '250 — dedicated',
+    500: '500 — obsessed',
+    1000: '1000 — legendary'
+  };
+
+  let count = 0;
+  let toastTimeout;
+
+  // Build milestone badges
+  const milestonesEl = document.getElementById('milestones');
+  MILESTONES.forEach(m => {
+    const el = document.createElement('div');
+    el.className = 'milestone';
+    el.id = `m-${m}`;
+    el.textContent = m;
+    milestonesEl.appendChild(el);
+  });
+
+  function handleClick(e) {
+    count++;
+    updateDisplay();
+    updateProgress();
+    spawnRipple(e);
+    checkMilestone();
+  }
+
+  function updateDisplay() {
+    const el = document.getElementById('count');
+    el.textContent = count.toLocaleString();
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
+    setTimeout(() => el.classList.remove('pop'), 200);
+  }
+
+  function updateProgress() {
+    const prev = MILESTONES.filter(m => m <= count).pop() || 0;
+    const next = MILESTONES.find(m => m > count);
+    const fill = document.getElementById('progress-fill');
+    const label = document.getElementById('progress-label');
+    const pct = document.getElementById('progress-pct');
+
+    if (!next) {
+      fill.style.width = '100%';
+      label.textContent = 'max reached!';
+      pct.textContent = '100%';
+      return;
+    }
+
+    const progress = (count - prev) / (next - prev);
+    const pctVal = Math.round(progress * 100);
+    fill.style.width = pctVal + '%';
+    label.textContent = `next: ${next}`;
+    pct.textContent = pctVal + '%';
+  }
+
+  function checkMilestone() {
+    if (MILESTONES.includes(count)) {
+      triggerMilestone(count);
+    }
+  }
+
+  function triggerMilestone(m) {
+    const badge = document.getElementById(`m-${m}`);
+    if (badge) badge.classList.add('reached');
+    showToast(MILESTONE_LABELS[m]);
+
+    const flash = document.createElement('div');
+    flash.className = 'flash';
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 600);
+
+    const countEl = document.getElementById('count');
+    countEl.classList.add('milestone-glow');
+    setTimeout(() => countEl.classList.remove('milestone-glow'), 1200);
+
+    launchConfetti();
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  function spawnRipple(e) {
+    const r = document.createElement('div');
+    r.className = 'ripple';
+    const size = 140;
+    r.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX-size/2}px;top:${e.clientY-size/2}px;`;
+    document.body.appendChild(r);
+    setTimeout(() => r.remove(), 700);
+  }
+
+  function resetCount() {
+    count = 0;
+    updateDisplay();
+    updateProgress();
+    MILESTONES.forEach(m => {
+      const b = document.getElementById(`m-${m}`);
+      if (b) b.classList.remove('reached');
+    });
+  }
+
+  // ── Confetti ─────────────────────────────────────────────
+  const confettiCanvas = document.getElementById('confetti');
+  const cctx = confettiCanvas.getContext('2d');
+  let confettiPieces = [];
+  let confettiRunning = false;
+
+  const CONFETTI_COLORS = [
+    '#a0f0c0', '#f0a0c8', '#a0c8f0', '#f0e0a0', '#c8a0f0', '#f0a0a0'
+  ];
+
+  function resizeConfetti() {
+    confettiCanvas.width = window.innerWidth;
+    confettiCanvas.height = window.innerHeight;
+  }
+  resizeConfetti();
+
+  function launchConfetti() {
+    for (let i = 0; i < 120; i++) {
+      confettiPieces.push({
+        x: Math.random() * window.innerWidth,
+        y: -10 - Math.random() * 100,
+        w: 6 + Math.random() * 8,
+        h: 3 + Math.random() * 5,
+        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+        vx: (Math.random() - 0.5) * 4,
+        vy: 2 + Math.random() * 4,
+        angle: Math.random() * Math.PI * 2,
+        spin: (Math.random() - 0.5) * 0.2,
+        alpha: 1,
+        gravity: 0.08 + Math.random() * 0.06,
+        shape: Math.random() > 0.5 ? 'rect' : 'circle'
+      });
+    }
+    if (!confettiRunning) {
+      confettiRunning = true;
+      animateConfetti();
+    }
+  }
+
+  function animateConfetti() {
+    cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    confettiPieces = confettiPieces.filter(p => p.alpha > 0.01 && p.y < confettiCanvas.height + 20);
+
+    confettiPieces.forEach(p => {
+      p.vy += p.gravity;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.angle += p.spin;
+      if (p.y > confettiCanvas.height * 0.7) p.alpha -= 0.018;
+
+      cctx.save();
+      cctx.globalAlpha = p.alpha;
+      cctx.translate(p.x, p.y);
+      cctx.rotate(p.angle);
+      cctx.fillStyle = p.color;
+
+      if (p.shape === 'circle') {
+        cctx.beginPath();
+        cctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+        cctx.fill();
+      } else {
+        cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      }
+      cctx.restore();
+    });
+
+    if (confettiPieces.length > 0) {
+      requestAnimationFrame(animateConfetti);
+    } else {
+      confettiRunning = false;
+      cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    }
+  }
+
+  // ── Ambient particles ─────────────────────────────────────
+  const canvas = document.getElementById('particles');
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', () => { resize(); resizeConfetti(); });
+
+  for (let i = 0; i < 40; i++) {
+    particles.push({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      r: Math.random() * 1.5 + 0.3,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      alpha: Math.random() * 0.3 + 0.05
+    });
+  }
+
+  function animateParticles() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0) p.x = canvas.width;
+      if (p.x > canvas.width) p.x = 0;
+      if (p.y < 0) p.y = canvas.height;
+      if (p.y > canvas.height) p.y = 0;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(160,240,192,${p.alpha})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(animateParticles);
+  }
+  animateParticles();
+
+  // Keyboard support
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.code === 'Enter') {
+      e.preventDefault();
+      handleClick({ clientX: window.innerWidth/2, clientY: window.innerHeight/2 });
+    }
+  });
+</script>
+</body>
+</html>
